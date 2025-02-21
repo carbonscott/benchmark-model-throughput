@@ -10,6 +10,15 @@ benchmark:
   num_warmup: 10
   num_iterations: 100
   device: "cuda"
+  compile:
+    enabled: false
+    mode: "default"  # options: default, reduce-overhead, max-autotune
+    fullgraph: true
+    dynamic: false
+  precision:
+    dtype: "float32"  # options: float32, float16, bfloat16
+    autocast: true    # whether to use torch.autocast
+    grad_scaler: false  # typically not needed for inference
 
 hydra:
   run:

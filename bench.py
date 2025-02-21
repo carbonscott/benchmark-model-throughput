@@ -22,9 +22,14 @@ class BenchmarkResult:
     model_name: str
     model_config: str
     model_size_mb: float
+    num_params: int
     throughput_gbps: float
     latency_ms: float
     gpu_mem_usage_mb: float
+
+def get_num_params(model: nn.Module) -> int:
+    """Get total number of parameters in the model"""
+    return sum(p.numel() for p in model.parameters())
 
 class ModelFactory:
     @staticmethod
@@ -70,6 +75,21 @@ class ModelFactory:
             **config
         )
 
+def get_dtype(dtype_str: str) -> torch.dtype:
+    """Convert string dtype to torch.dtype"""
+    dtype_map = {
+        "float32": torch.float32,
+        "float16": torch.float16,
+        "bfloat16": torch.bfloat16
+    }
+    return dtype_map[dtype_str.lower()]
+
+def convert_model_dtype(model: nn.Module, dtype: torch.dtype) -> nn.Module:
+    """Convert model to specified dtype"""
+    if dtype in [torch.float16, torch.bfloat16]:
+        model = model.to(dtype)
+    return model
+
 def get_model_size(model: nn.Module) -> float:
     """Get model size in MB"""
     param_size = 0
@@ -86,7 +106,9 @@ def benchmark_model(
     batch_size: int,
     num_warmup: int,
     num_iterations: int,
-    device: str
+    device: str,
+    compile_cfg: DictConfig,
+    precision_cfg: DictConfig,
 ) -> BenchmarkResult:
     """Run benchmark for a single model configuration"""
     # Clear GPU cache and run garbage collection
@@ -99,14 +121,44 @@ def benchmark_model(
     # Store model info before potential cleanup
     model_name = model.__class__.__name__
     model_config = str(model)
+    num_params = get_num_params(model)
+
+    # Convert model dtype if needed
+    dtype = get_dtype(precision_cfg.dtype)
+    model = convert_model_dtype(model, dtype)
+
+    # Apply torch.compile if enabled
+    if compile_cfg.enabled:
+        try:
+            model = torch.compile(
+                model,
+                mode=compile_cfg.mode,
+                fullgraph=compile_cfg.fullgraph,
+                dynamic=compile_cfg.dynamic
+            )
+            log.info(f"Model compiled with mode: {compile_cfg.mode}")
+        except Exception as e:
+            log.warning(f"Failed to compile model: {str(e)}")
 
     # Create random input data
     inputs = torch.randn(batch_size, *input_shape, device=device)
+    if dtype in [torch.float16, torch.bfloat16]:
+        inputs = inputs.to(dtype)
 
-    # Warmup
-    with torch.no_grad():
-        for _ in range(num_warmup):
+    # Setup autocast if enabled
+    autocast_ctx = (
+        torch.autocast(device_type='cuda', dtype=dtype)
+        if precision_cfg.autocast
+        else nullcontext()
+    )
+
+    # Warmup - extra warmup iterations for compiled models
+    num_compile_warmup = num_warmup * 2 if compile_cfg.enabled else num_warmup
+    with torch.no_grad(), autocast_ctx:
+        for i in range(num_compile_warmup):
             _ = model(inputs)
+            if i == 0:
+                torch.cuda.synchronize()  # Ensure first compilation is done
 
     torch.cuda.synchronize()
 
@@ -115,7 +167,7 @@ def benchmark_model(
 
     # Benchmark
     latencies = []
-    with torch.no_grad():
+    with torch.no_grad(), autocast_ctx:
         for _ in range(num_iterations):
             start = time.perf_counter()
             _ = model(inputs)
@@ -135,9 +187,10 @@ def benchmark_model(
     gc.collect()
 
     return BenchmarkResult(
-        model_name=model_name,
+        model_name=f"{model_name}_{precision_cfg.dtype}",
         model_config=model_config,
         model_size_mb=model_size,
+        num_params=num_params,
         throughput_gbps=throughput,
         latency_ms=avg_latency,
         gpu_mem_usage_mb=gpu_mem
@@ -146,6 +199,11 @@ def benchmark_model(
 @hydra.main(config_path="configs", config_name="config", version_base=None)
 def run_benchmark(cfg: DictConfig) -> None:
     log.info(f"Running benchmark with config:\n{OmegaConf.to_yaml(cfg)}")
+
+    # Check if the GPU supports the requested dtype
+    if cfg.benchmark.precision.dtype in ["bfloat16", "float16"]:
+        if cfg.benchmark.precision.dtype == "bfloat16" and not torch.cuda.is_bf16_supported():
+            raise RuntimeError("BFloat16 is not supported on this GPU")
 
     input_size = np.prod(cfg.input.shape)
     results = []
@@ -162,7 +220,9 @@ def run_benchmark(cfg: DictConfig) -> None:
                     cfg.input.batch_size,
                     cfg.benchmark.num_warmup,
                     cfg.benchmark.num_iterations,
-                    cfg.benchmark.device
+                    cfg.benchmark.device,
+                    cfg.benchmark.compile,
+                    cfg.benchmark.precision,
                 )
                 results.append(result)
 
@@ -179,7 +239,28 @@ def run_benchmark(cfg: DictConfig) -> None:
                     cfg.input.batch_size,
                     cfg.benchmark.num_warmup,
                     cfg.benchmark.num_iterations,
-                    cfg.benchmark.device
+                    cfg.benchmark.device,
+                    cfg.benchmark.compile,
+                    cfg.benchmark.precision,
+                )
+                results.append(result)
+
+        elif cfg.model.type == "mlp":
+            log.info("Benchmarking MLP models")
+            for hidden_sizes in cfg.model.architectures:
+                log.info(f"Testing MLP with architecture: {hidden_sizes}")
+                # Convert OmegaConf list to Python list
+                hidden_sizes_list = [int(size) for size in hidden_sizes]
+                model = ModelFactory.create_mlp(input_size, hidden_sizes_list)
+                result = benchmark_model(
+                    model,
+                    tuple(cfg.input.shape),
+                    cfg.input.batch_size,
+                    cfg.benchmark.num_warmup,
+                    cfg.benchmark.num_iterations,
+                    cfg.benchmark.device,
+                    cfg.benchmark.compile,
+                    cfg.benchmark.precision,
                 )
                 results.append(result)
 
@@ -198,7 +279,9 @@ def run_benchmark(cfg: DictConfig) -> None:
                     cfg.input.batch_size,
                     cfg.benchmark.num_warmup,
                     cfg.benchmark.num_iterations,
-                    cfg.benchmark.device
+                    cfg.benchmark.device,
+                    cfg.benchmark.compile,
+                    cfg.benchmark.precision,
                 )
                 results.append(result)
 
@@ -217,7 +300,9 @@ def run_benchmark(cfg: DictConfig) -> None:
                         cfg.input.batch_size,
                         cfg.benchmark.num_warmup,
                         cfg.benchmark.num_iterations,
-                        cfg.benchmark.device
+                        cfg.benchmark.device,
+                        cfg.benchmark.compile,
+                        cfg.benchmark.precision,
                     )
                     results.append(result)
                 except Exception as e:
@@ -240,7 +325,9 @@ def run_benchmark(cfg: DictConfig) -> None:
                         cfg.input.batch_size,
                         cfg.benchmark.num_warmup,
                         cfg.benchmark.num_iterations,
-                        cfg.benchmark.device
+                        cfg.benchmark.device,
+                        cfg.benchmark.compile,
+                        cfg.benchmark.precision,
                     )
                     results.append(result)
                 except Exception as e:
@@ -255,16 +342,17 @@ def run_benchmark(cfg: DictConfig) -> None:
         raise
 
     # Save results
-    output_file = "benchmark_results.json"
+    output_file = f"benchmark_results_{cfg.benchmark.precision.dtype}.json"
     with open(output_file, 'w') as f:
         json.dump([vars(r) for r in results], f, indent=2)
 
-    # Print summary
-    log.info("\nBenchmark Results:")
-    log.info(f"{'Model':<20} {'Size (MB)':<12} {'Throughput (GB/s)':<18} {'Latency (ms)':<14} {'GPU Mem (MB)':<12}")
-    log.info("-" * 80)
+    # Print summary with parameter count
+    log.info(f"\nBenchmark Results (Precision: {cfg.benchmark.precision.dtype}):")
+    log.info(f"{'Model':<30} {'Params':<12} {'Size (MB)':<12} {'Throughput (GB/s)':<18} {'Latency (ms)':<14} {'GPU Mem (MB)':<12}")
+    log.info("-" * 102)  # Adjusted line length
     for r in results:
-        log.info(f"{r.model_name:<20} {r.model_size_mb:<12.2f} {r.throughput_gbps:<18.2f} {r.latency_ms:<14.2f} {r.gpu_mem_usage_mb:<12.2f}")
+        params_str = f"{r.num_params:,}"  # Format with commas for readability
+        log.info(f"{r.model_name:<30} {params_str:<12} {r.model_size_mb:<12.2f} {r.throughput_gbps:<18.2f} {r.latency_ms:<14.2f} {r.gpu_mem_usage_mb:<12.2f}")
 
 if __name__ == "__main__":
     run_benchmark()
