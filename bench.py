@@ -351,7 +351,7 @@ def run_benchmark(cfg: DictConfig) -> None:
     log.info(f"{'Model':<30} {'Params':<12} {'Size (MB)':<12} {'Throughput (GB/s)':<18} {'Latency (ms)':<14} {'GPU Mem (MB)':<12}")
     log.info("-" * 102)  # Adjusted line length
     for r in results:
-        params_str = f"{r.num_params:,}"  # Format with commas for readability
+        params_str = f"{r.num_params:,}"
         log.info(f"{r.model_name:<30} {params_str:<12} {r.model_size_mb:<12.2f} {r.throughput_gbps:<18.2f} {r.latency_ms:<14.2f} {r.gpu_mem_usage_mb:<12.2f}")
 
 if __name__ == "__main__":
