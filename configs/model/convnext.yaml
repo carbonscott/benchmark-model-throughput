@@ -1,0 +1,2 @@
+type: convnext
+variants: ['convnextv2_atto', 'convnextv2_femto', 'convnextv2_pico', 'convnextv2_nano', 'convnextv2_tiny']

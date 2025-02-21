@@ -1,0 +1,19 @@
+defaults:
+  - _self_
+  - model: linear
+
+input:
+  shape: [1, 352, 384]
+  batch_size: 32
+
+benchmark:
+  num_warmup: 10
+  num_iterations: 100
+  device: "cuda"
+
+hydra:
+  run:
+    dir: outputs/${model.type}/${now:%Y-%m-%d}/${now:%H-%M-%S}
+  sweep:
+    dir: multirun/${now:%Y-%m-%d}/${now:%H-%M-%S}
+    subdir: ${model.type}

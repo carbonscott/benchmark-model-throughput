@@ -1,0 +1,12 @@
+type: vit
+configs:
+  - hidden_size: 192
+    num_heads: 3
+  - hidden_size: 384
+    num_heads: 6
+  - hidden_size: 576
+    num_heads: 9
+  - hidden_size: 768
+    num_heads: 12
+  - hidden_size: 1024
+    num_heads: 16
