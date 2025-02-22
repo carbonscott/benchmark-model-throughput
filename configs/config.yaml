@@ -11,7 +11,7 @@ benchmark:
   num_iterations: 100
   device: "cuda"
   compile:
-    enabled: false
+    backend: null # options: null, "torch", "tensorrt"
     mode: "default"  # options: default, reduce-overhead, max-autotune
     fullgraph: true
     dynamic: false

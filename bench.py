@@ -127,8 +127,24 @@ def benchmark_model(
     dtype = get_dtype(precision_cfg.dtype)
     model = convert_model_dtype(model, dtype)
 
-    # Apply torch.compile if enabled
-    if compile_cfg.enabled:
+    # Create random input data
+    inputs = torch.randn(batch_size, *input_shape, device=device)
+    if dtype in [torch.float16, torch.bfloat16]:
+        inputs = inputs.to(dtype)
+
+    # Apply compilation optimizations
+    if compile_cfg.backend == "tensorrt":
+        try:
+            import torch_tensorrt
+            model = torch_tensorrt.compile(
+                model,
+                inputs=[inputs,],
+                enabled_precisions={dtype} if dtype != torch.float32 else {torch.float32}
+            )
+            log.info("Model compiled with TensorRT")
+        except Exception as e:
+            log.warning(f"Failed to compile model with TensorRT: {str(e)}")
+    elif compile_cfg.backend == "torch":
         try:
             model = torch.compile(
                 model,
@@ -140,11 +156,6 @@ def benchmark_model(
         except Exception as e:
             log.warning(f"Failed to compile model: {str(e)}")
 
-    # Create random input data
-    inputs = torch.randn(batch_size, *input_shape, device=device)
-    if dtype in [torch.float16, torch.bfloat16]:
-        inputs = inputs.to(dtype)
-
     # Setup autocast if enabled
     autocast_ctx = (
         torch.autocast(device_type='cuda', dtype=dtype)
@@ -153,7 +164,7 @@ def benchmark_model(
     )
 
     # Warmup - extra warmup iterations for compiled models
-    num_compile_warmup = num_warmup * 2 if compile_cfg.enabled else num_warmup
+    num_compile_warmup = num_warmup * 2 if compile_cfg.backend is not None else num_warmup
     with torch.no_grad(), autocast_ctx:
         for i in range(num_compile_warmup):
             _ = model(inputs)
@@ -342,7 +353,8 @@ def run_benchmark(cfg: DictConfig) -> None:
         raise
 
     # Save results
-    output_file = f"benchmark_results_{cfg.benchmark.precision.dtype}.json"
+    compile_method = "eager" if cfg.benchmark.compile.backend is None else cfg.benchmark.compile.backend
+    output_file = f"benchmark_results_{cfg.model.type}_bs{cfg.input.batch_size}_{cfg.benchmark.precision.dtype}_{compile_method}.json"
     with open(output_file, 'w') as f:
         json.dump([vars(r) for r in results], f, indent=2)
 
