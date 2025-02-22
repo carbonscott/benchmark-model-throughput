@@ -3,7 +3,7 @@ defaults:
   - model: linear
 
 input:
-  shape: [1, 352, 384]
+  shape: [1, 384, 384]
   batch_size: 32
 
 benchmark:

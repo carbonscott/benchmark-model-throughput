@@ -2,11 +2,26 @@ type: vit
 configs:
   - hidden_size: 192
     num_heads: 3
+    patch_size: 24
+    image_size: 384
+    num_channels: 1
   - hidden_size: 384
     num_heads: 6
+    patch_size: 24
+    image_size: 384
+    num_channels: 1
   - hidden_size: 576
     num_heads: 9
+    patch_size: 24
+    image_size: 384
+    num_channels: 1
   - hidden_size: 768
     num_heads: 12
+    patch_size: 24
+    image_size: 384
+    num_channels: 1
   - hidden_size: 1024
     num_heads: 16
+    patch_size: 24
+    image_size: 384
+    num_channels: 1

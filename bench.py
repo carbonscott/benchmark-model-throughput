@@ -11,7 +11,7 @@ from omegaconf import DictConfig, OmegaConf, ListConfig
 import logging
 import json
 import timm
-from transformers import ViTModel
+from transformers import ViTModel, ViTConfig
 import torch.cuda.profiler as profiler
 import gc
 
@@ -64,15 +64,12 @@ class ModelFactory:
         return timm.create_model(variant, pretrained=False, in_chans=in_channels)
 
     @staticmethod
-    def create_vit(config: dict, image_size: int, in_channels: int) -> nn.Module:
+    def create_vit(config: dict) -> nn.Module:
         # Convert OmegaConf dict to Python dict if necessary
         if isinstance(config, DictConfig):
             config = OmegaConf.to_container(config)
         return ViTModel(
-            image_size=image_size,
-            patch_size=16,
-            num_channels=in_channels,
-            **config
+            ViTConfig(**config)
         )
 
 def get_dtype(dtype_str: str) -> torch.dtype:
@@ -327,8 +324,6 @@ def run_benchmark(cfg: DictConfig) -> None:
                 try:
                     model = ModelFactory.create_vit(
                         config,
-                        max(cfg.input.shape[1:]),  # Use larger dimension as image size
-                        cfg.input.shape[0]
                     )
                     result = benchmark_model(
                         model,
