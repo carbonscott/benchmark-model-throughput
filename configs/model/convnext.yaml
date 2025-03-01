@@ -1,2 +1,258 @@
 type: convnext
-variants: ['convnextv2_atto', 'convnextv2_femto', 'convnextv2_pico', 'convnextv2_nano', 'convnextv2_tiny']
+configs:
+  - name: atto
+    config_params:
+      depths:
+      - 2
+      - 2
+      - 6
+      - 2
+      drop_path_rate: 0.0
+      hidden_act: gelu
+      hidden_sizes:
+      - 40
+      - 80
+      - 160
+      - 320
+      image_size: 224
+      initializer_range: 0.02
+      layer_norm_eps: 1.0e-12
+      model_type: convnextv2
+      num_channels: 3
+      num_stages: 4
+      out_features:
+      - stage4
+      out_indices:
+      - 4
+      patch_size: 4
+      stage_names:
+      - stem
+      - stage1
+      - stage2
+      - stage3
+      - stage4
+      transformers_version: 4.49.0
+  - name: femto
+    config_params:
+      depths:
+      - 2
+      - 2
+      - 6
+      - 2
+      drop_path_rate: 0.0
+      hidden_act: gelu
+      hidden_sizes:
+      - 48
+      - 96
+      - 192
+      - 384
+      image_size: 224
+      initializer_range: 0.02
+      layer_norm_eps: 1.0e-12
+      model_type: convnextv2
+      num_channels: 3
+      num_stages: 4
+      out_features:
+      - stage4
+      out_indices:
+      - 4
+      patch_size: 4
+      stage_names:
+      - stem
+      - stage1
+      - stage2
+      - stage3
+      - stage4
+      transformers_version: 4.49.0
+  - name: pico
+    config_params:
+      depths:
+      - 2
+      - 2
+      - 6
+      - 2
+      drop_path_rate: 0.0
+      hidden_act: gelu
+      hidden_sizes:
+      - 64
+      - 128
+      - 256
+      - 512
+      image_size: 224
+      initializer_range: 0.02
+      layer_norm_eps: 1.0e-12
+      model_type: convnextv2
+      num_channels: 3
+      num_stages: 4
+      out_features:
+      - stage4
+      out_indices:
+      - 4
+      patch_size: 4
+      stage_names:
+      - stem
+      - stage1
+      - stage2
+      - stage3
+      - stage4
+      transformers_version: 4.49.0
+  - name: nano
+    config_params:
+      depths:
+      - 2
+      - 2
+      - 8
+      - 2
+      drop_path_rate: 0.0
+      hidden_act: gelu
+      hidden_sizes:
+      - 80
+      - 160
+      - 320
+      - 640
+      image_size: 224
+      initializer_range: 0.02
+      layer_norm_eps: 1.0e-12
+      model_type: convnextv2
+      num_channels: 3
+      num_stages: 4
+      out_features:
+      - stage4
+      out_indices:
+      - 4
+      patch_size: 4
+      stage_names:
+      - stem
+      - stage1
+      - stage2
+      - stage3
+      - stage4
+      transformers_version: 4.49.0
+  - name: tiny
+    config_params:
+      depths:
+      - 3
+      - 3
+      - 9
+      - 3
+      drop_path_rate: 0.0
+      hidden_act: gelu
+      hidden_sizes:
+      - 96
+      - 192
+      - 384
+      - 768
+      image_size: 224
+      initializer_range: 0.02
+      layer_norm_eps: 1.0e-12
+      model_type: convnextv2
+      num_channels: 3
+      num_stages: 4
+      out_features:
+      - stage4
+      out_indices:
+      - 4
+      patch_size: 4
+      stage_names:
+      - stem
+      - stage1
+      - stage2
+      - stage3
+      - stage4
+      transformers_version: 4.49.0
+  - name: base
+    config_params:
+      depths:
+      - 3
+      - 3
+      - 27
+      - 3
+      drop_path_rate: 0.0
+      hidden_act: gelu
+      hidden_sizes:
+      - 128
+      - 256
+      - 512
+      - 1024
+      image_size: 224
+      initializer_range: 0.02
+      layer_norm_eps: 1.0e-12
+      model_type: convnextv2
+      num_channels: 3
+      num_stages: 4
+      out_features:
+      - stage4
+      out_indices:
+      - 4
+      patch_size: 4
+      stage_names:
+      - stem
+      - stage1
+      - stage2
+      - stage3
+      - stage4
+      transformers_version: 4.49.0
+  - name: large
+    config_params:
+      depths:
+      - 3
+      - 3
+      - 27
+      - 3
+      drop_path_rate: 0.0
+      hidden_act: gelu
+      hidden_sizes:
+      - 192
+      - 384
+      - 768
+      - 1536
+      image_size: 224
+      initializer_range: 0.02
+      layer_norm_eps: 1.0e-12
+      model_type: convnextv2
+      num_channels: 3
+      num_stages: 4
+      out_features:
+      - stage4
+      out_indices:
+      - 4
+      patch_size: 4
+      stage_names:
+      - stem
+      - stage1
+      - stage2
+      - stage3
+      - stage4
+      transformers_version: 4.49.0
+  - name: huge
+    config_params:
+      depths:
+      - 3
+      - 3
+      - 27
+      - 3
+      drop_path_rate: 0.0
+      hidden_act: gelu
+      hidden_sizes:
+      - 352
+      - 704
+      - 1408
+      - 2816
+      image_size: 224
+      initializer_range: 0.02
+      layer_norm_eps: 1.0e-12
+      model_type: convnextv2
+      num_channels: 3
+      num_stages: 4
+      out_features:
+      - stage4
+      out_indices:
+      - 4
+      patch_size: 4
+      stage_names:
+      - stem
+      - stage1
+      - stage2
+      - stage3
+      - stage4
+      transformers_version: 4.49.0

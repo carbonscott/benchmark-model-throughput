@@ -11,7 +11,7 @@ from omegaconf import DictConfig, OmegaConf, ListConfig
 import logging
 import json
 import timm
-from transformers import ViTModel, ViTConfig
+from transformers import ViTModel, ViTConfig, ConvNextV2Config, ConvNextV2Model
 import torch.cuda.profiler as profiler
 import gc
 
@@ -62,6 +62,12 @@ class ModelFactory:
     @staticmethod
     def create_convnext(variant: str, in_channels: int) -> nn.Module:
         return timm.create_model(variant, pretrained=False, in_chans=in_channels)
+
+    @staticmethod
+    def create_convnextv2_from_config(config: dict) -> nn.Module:
+        return ConvNextV2Model(
+            ConvNextV2Config(**config)
+        )
 
     @staticmethod
     def create_vit(config: dict) -> nn.Module:
@@ -136,7 +142,12 @@ def benchmark_model(
             model = torch_tensorrt.compile(
                 model,
                 inputs=[inputs,],
-                enabled_precisions={dtype} if dtype != torch.float32 else {torch.float32}
+                enabled_precisions={dtype} if dtype != torch.float32 else {torch.float32},
+                workspace_size=1 << 30,  # Allocate more workspace (1GB)
+                minimum_segment_size=5,  # Larger segments
+                debug=False,
+                verbose=False,
+                max_batch_size=batch_size
             )
             log.info("Model compiled with TensorRT")
         except Exception as e:
@@ -295,13 +306,20 @@ def run_benchmark(cfg: DictConfig) -> None:
 
         elif cfg.model.type == "convnext":
             log.info("Benchmarking ConvNeXt models")
-            for variant in cfg.model.variants:
-                log.info(f"Testing ConvNeXt variant: {variant}")
+            # Handle custom configurations
+            for custom_config in cfg.model.configs:
+                log.info(f"Testing custom ConvNeXt config: {custom_config.name}")
                 try:
-                    model = ModelFactory.create_convnext(
-                        str(variant),
-                        cfg.input.shape[0]
-                    )
+                    custom_config.config_params.image_size = cfg.input.shape[-1]
+                    custom_config.config_params.num_channels = cfg.input.shape[0]
+
+                    # Convert OmegaConf dict to Python dict if necessary
+                    if isinstance(custom_config.config_params, DictConfig):
+                        custom_config_params = OmegaConf.to_container(custom_config.config_params)
+
+                    # Create model from config
+                    model = ModelFactory.create_convnextv2_from_config(custom_config_params)
+
                     result = benchmark_model(
                         model,
                         tuple(cfg.input.shape),
@@ -314,7 +332,7 @@ def run_benchmark(cfg: DictConfig) -> None:
                     )
                     results.append(result)
                 except Exception as e:
-                    log.error(f"Error testing ConvNeXt variant {variant}: {str(e)}")
+                    log.error(f"Error testing custom config: {str(e)}")
                     continue
 
         elif cfg.model.type == "vit":
