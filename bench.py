@@ -71,9 +71,7 @@ class ModelFactory:
 
     @staticmethod
     def create_vit(config: dict) -> nn.Module:
-        # Convert OmegaConf dict to Python dict if necessary
-        if isinstance(config, DictConfig):
-            config = OmegaConf.to_container(config)
+        # Create and return the ViT model
         return ViTModel(
             ViTConfig(**config)
         )
@@ -112,6 +110,7 @@ def benchmark_model(
     device: str,
     compile_cfg: DictConfig,
     precision_cfg: DictConfig,
+    quant_cfg: DictConfig = None,
 ) -> BenchmarkResult:
     """Run benchmark for a single model configuration"""
     # Clear GPU cache and run garbage collection
@@ -337,12 +336,20 @@ def run_benchmark(cfg: DictConfig) -> None:
 
         elif cfg.model.type == "vit":
             log.info("Benchmarking Vision Transformer models")
-            for config in cfg.model.configs:
-                log.info(f"Testing ViT with config: {config}")
+            for custom_config in cfg.model.configs:
+                log.info(f"Testing ViT with config: {custom_config.name}")
                 try:
-                    model = ModelFactory.create_vit(
-                        config,
-                    )
+                    # Apply input shape parameters to the config
+                    custom_config.config_params.image_size = cfg.input.shape[-1]
+                    custom_config.config_params.num_channels = cfg.input.shape[0]
+
+                    # Convert OmegaConf dict to Python dict if necessary
+                    if isinstance(custom_config.config_params, DictConfig):
+                        custom_config_params = OmegaConf.to_container(custom_config.config_params)
+
+                    # Create model from config
+                    model = ModelFactory.create_vit(custom_config_params)
+
                     result = benchmark_model(
                         model,
                         tuple(cfg.input.shape),
@@ -355,7 +362,7 @@ def run_benchmark(cfg: DictConfig) -> None:
                     )
                     results.append(result)
                 except Exception as e:
-                    log.error(f"Error testing ViT config {config}: {str(e)}")
+                    log.error(f"Error testing ViT config {custom_config.name}: {str(e)}")
                     continue
 
         else:

@@ -1,27 +1,81 @@
 type: vit
 configs:
-  - hidden_size: 192
-    num_heads: 3
-    patch_size: 24
-    image_size: 384
-    num_channels: 1
-  - hidden_size: 384
-    num_heads: 6
-    patch_size: 24
-    image_size: 384
-    num_channels: 1
-  - hidden_size: 576
-    num_heads: 9
-    patch_size: 24
-    image_size: 384
-    num_channels: 1
-  - hidden_size: 768
-    num_heads: 12
-    patch_size: 24
-    image_size: 384
-    num_channels: 1
-  - hidden_size: 1024
-    num_heads: 16
-    patch_size: 24
-    image_size: 384
-    num_channels: 1
+  - name: tiny
+    config_params:
+      hidden_size: 192
+      num_hidden_layers: 6
+      num_attention_heads: 3
+      intermediate_size: 768
+      hidden_act: gelu
+      hidden_dropout_prob: 0.0
+      attention_probs_dropout_prob: 0.0
+      initializer_range: 0.02
+      layer_norm_eps: 1.0e-12
+      image_size: 224
+      patch_size: 16
+      num_channels: 3
+      qkv_bias: true
+
+  - name: small
+    config_params:
+      hidden_size: 384
+      num_hidden_layers: 8
+      num_attention_heads: 6
+      intermediate_size: 1536
+      hidden_act: gelu
+      hidden_dropout_prob: 0.0
+      attention_probs_dropout_prob: 0.0
+      initializer_range: 0.02
+      layer_norm_eps: 1.0e-12
+      image_size: 224
+      patch_size: 16
+      num_channels: 3
+      qkv_bias: true
+
+  - name: base
+    config_params:
+      hidden_size: 768
+      num_hidden_layers: 12
+      num_attention_heads: 12
+      intermediate_size: 3072
+      hidden_act: gelu
+      hidden_dropout_prob: 0.0
+      attention_probs_dropout_prob: 0.0
+      initializer_range: 0.02
+      layer_norm_eps: 1.0e-12
+      image_size: 224
+      patch_size: 16
+      num_channels: 3
+      qkv_bias: true
+
+  - name: large
+    config_params:
+      hidden_size: 1024
+      num_hidden_layers: 16
+      num_attention_heads: 16
+      intermediate_size: 4096
+      hidden_act: gelu
+      hidden_dropout_prob: 0.0
+      attention_probs_dropout_prob: 0.0
+      initializer_range: 0.02
+      layer_norm_eps: 1.0e-12
+      image_size: 224
+      patch_size: 16
+      num_channels: 3
+      qkv_bias: true
+
+  - name: huge
+    config_params:
+      hidden_size: 1280
+      num_hidden_layers: 24
+      num_attention_heads: 20
+      intermediate_size: 5120
+      hidden_act: gelu
+      hidden_dropout_prob: 0.0
+      attention_probs_dropout_prob: 0.0
+      initializer_range: 0.02
+      layer_norm_eps: 1.0e-12
+      image_size: 224
+      patch_size: 16
+      num_channels: 3
+      qkv_bias: true
