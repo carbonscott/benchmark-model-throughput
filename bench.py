@@ -81,9 +81,19 @@ def get_dtype(dtype_str: str) -> torch.dtype:
     dtype_map = {
         "float32": torch.float32,
         "float16": torch.float16,
-        "bfloat16": torch.bfloat16
+        "bfloat16": torch.bfloat16,
+        "int8": torch.int8,
+        "fp8": torch.float8_e4m3fn,
     }
     return dtype_map[dtype_str.lower()]
+
+def calibration_loop(model, input_shape=(3, 224, 224)):
+    """Calibration loop that uses the correct input shape"""
+    device = next(model.parameters()).device
+    for _ in range(10):  # 10 calibration batches
+        calib_data = torch.randn(16, *input_shape, device=device)
+        with torch.no_grad():
+            _ = model(calib_data)
 
 def convert_model_dtype(model: nn.Module, dtype: torch.dtype) -> nn.Module:
     """Convert model to specified dtype"""
@@ -137,18 +147,39 @@ def benchmark_model(
     # Apply compilation optimizations
     if compile_cfg.backend == "tensorrt":
         try:
-            import torch_tensorrt
-            model = torch_tensorrt.compile(
-                model,
-                inputs=[inputs,],
-                enabled_precisions={dtype} if dtype != torch.float32 else {torch.float32},
-                workspace_size=1 << 30,  # Allocate more workspace (1GB)
-                minimum_segment_size=5,  # Larger segments
-                debug=False,
-                verbose=False,
-                max_batch_size=batch_size
-            )
-            log.info("Model compiled with TensorRT")
+            import modelopt.torch.quantization as mtq
+            from modelopt.torch.quantization.utils import export_torch_mode
+            import torch_tensorrt as torchtrt
+
+            # Apply quantization if the precision dtype indicates INT8 or FP8
+            if precision_cfg.dtype == "int8":
+                log.info(f"Applying INT8 quantization with input shape {input_shape}")
+                quant_cfg = mtq.INT8_DEFAULT_CFG
+                mtq.quantize(model, quant_cfg, 
+                             forward_loop=lambda m: calibration_loop(m, input_shape=input_shape))
+            elif precision_cfg.dtype == "fp8":
+                log.info(f"Applying FP8 quantization with input shape {input_shape}")
+                quant_cfg = mtq.FP8_DEFAULT_CFG
+                mtq.quantize(model, quant_cfg,
+                             forward_loop=lambda m: calibration_loop(m, input_shape=input_shape))
+
+            # Export the model (with quantization modifications in place)
+            with torch.no_grad(), export_torch_mode():
+                from torch.export._trace import _export
+                exp_program = _export(model, (inputs,))
+
+                # Set up enabled precisions
+                enabled_precisions = set(get_dtype(precision_cfg.dtype))
+
+                # Compile with TensorRT using the quantized model
+                model = torchtrt.dynamo.compile(
+                    exp_program,
+                    inputs=[inputs],
+                    enabled_precisions=enabled_precisions,
+                    min_block_size=5,
+                    workspace_size=1 << 30,
+                )
+            log.info(f"Model compiled with TensorRT using {precision_cfg.dtype}")
         except Exception as e:
             log.warning(f"Failed to compile model with TensorRT: {str(e)}")
     elif compile_cfg.backend == "torch":

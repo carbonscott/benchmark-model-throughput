@@ -19,6 +19,8 @@ benchmark:
     dtype: "float32"  # options: float32, float16, bfloat16
     autocast: true    # whether to use torch.autocast
     grad_scaler: false  # typically not needed for inference
+    calibration_batches: 10  # Number of batches to use for calibration
+    calibration_cache: "tensorrt_calibration.cache"  # Cache file for calibration
 
 hydra:
   run:
