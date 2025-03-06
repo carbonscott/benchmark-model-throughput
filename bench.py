@@ -14,6 +14,8 @@ import timm
 from transformers import ViTModel, ViTConfig, ConvNextV2Config, ConvNextV2Model
 import torch.cuda.profiler as profiler
 import gc
+from contextlib import nullcontext
+import copy
 
 log = logging.getLogger(__name__)
 
@@ -26,6 +28,8 @@ class BenchmarkResult:
     throughput_gbps: float
     latency_ms: float
     gpu_mem_usage_mb: float
+    tflops: float
+    total_flops: int
 
 def get_num_params(model: nn.Module) -> int:
     """Get total number of parameters in the model"""
@@ -134,6 +138,46 @@ def benchmark_model(
     if dtype in [torch.float16, torch.bfloat16]:
         inputs = inputs.to(dtype)
 
+    # Count FLOPs before model compilation
+    try:
+        # Create a copy of the model for FLOP counting
+        from torch.utils.flop_counter import FlopCounterMode
+
+        # Function to get total FLOPs
+        def get_flops(model, inp, with_backward=False):
+            istrain = model.training
+            model.eval()
+            inp = inp if isinstance(inp, torch.Tensor) else torch.randn(inp)
+            flop_counter = FlopCounterMode(mods=model, display=True, depth=None)
+            with flop_counter:
+                if with_backward:
+                    model(inp).sum().backward()
+                else:
+                    model(inp)
+            total_flops = flop_counter.get_total_flops()
+            if istrain:
+                model.train()
+            return total_flops
+
+        # Create sample input for FLOP counting
+        flops_model = copy.deepcopy(model)
+        flops_inputs = torch.randn(1, *input_shape, device=device)
+        if dtype in [torch.float16, torch.bfloat16]:
+            flops_inputs = flops_inputs.to(dtype)
+
+        # Get total FLOPs and scale by batch size
+        single_sample_flops = get_flops(flops_model, flops_inputs)
+        total_flops = single_sample_flops * batch_size
+        log.info(f"Model FLOPs: {total_flops / 1e12:.2f} TFLOPs (per batch)")
+
+        # Clean up
+        del flops_model, flops_inputs
+        gc.collect()
+
+    except Exception as e:
+        log.warning(f"Failed to calculate FLOPs: {str(e)}")
+        total_flops = 0
+
     # Apply compilation optimizations
     if compile_cfg.backend == "tensorrt":
         try:
@@ -199,6 +243,12 @@ def benchmark_model(
     model_size = get_model_size(model)
     gpu_mem = torch.cuda.max_memory_allocated() / 1024 / 1024  # MB
 
+    # Calculate TFLOPS
+    tflops = 0.0
+    if total_flops > 0 and avg_latency > 0:
+        tflops = (total_flops / (avg_latency / 1000)) / 1e12  # TFLOPS
+        log.info(f"Performance: {tflops:.2f} TFLOPS")
+
     # Clean up
     del model, inputs
     torch.cuda.empty_cache()
@@ -211,7 +261,9 @@ def benchmark_model(
         num_params=num_params,
         throughput_gbps=throughput,
         latency_ms=avg_latency,
-        gpu_mem_usage_mb=gpu_mem
+        gpu_mem_usage_mb=gpu_mem,
+        tflops=tflops,
+        total_flops=total_flops
     )
 
 @hydra.main(config_path="configs", config_name="config", version_base=None)
@@ -378,13 +430,13 @@ def run_benchmark(cfg: DictConfig) -> None:
     with open(output_file, 'w') as f:
         json.dump([vars(r) for r in results], f, indent=2)
 
-    # Print summary with parameter count
+    # Print summary with parameter count and TFLOPS
     log.info(f"\nBenchmark Results (Precision: {cfg.benchmark.precision.dtype}):")
-    log.info(f"{'Model':<30} {'Params':<12} {'Size (MB)':<12} {'Throughput (GB/s)':<18} {'Latency (ms)':<14} {'GPU Mem (MB)':<12}")
-    log.info("-" * 102)  # Adjusted line length
+    log.info(f"{'Model':<30} {'Params':<12} {'Size (MB)':<12} {'Throughput (GB/s)':<18} {'Latency (ms)':<14} {'GPU Mem (MB)':<12} {'TFLOPS':<10}")
+    log.info("-" * 112)  # Adjusted line length
     for r in results:
         params_str = f"{r.num_params:,}"
-        log.info(f"{r.model_name:<30} {params_str:<12} {r.model_size_mb:<12.2f} {r.throughput_gbps:<18.2f} {r.latency_ms:<14.2f} {r.gpu_mem_usage_mb:<12.2f}")
+        log.info(f"{r.model_name:<30} {params_str:<12} {r.model_size_mb:<12.2f} {r.throughput_gbps:<18.2f} {r.latency_ms:<14.2f} {r.gpu_mem_usage_mb:<12.2f} {r.tflops:<10.2f}")
 
 if __name__ == "__main__":
     run_benchmark()
