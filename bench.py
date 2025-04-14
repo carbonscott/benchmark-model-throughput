@@ -68,6 +68,11 @@ class ModelFactory:
         return timm.create_model(variant, pretrained=False, in_chans=in_channels)
 
     @staticmethod
+    def create_efficientnet(variant: str, in_channels: int) -> nn.Module:
+        """Create an EfficientNet model using timm"""
+        return timm.create_model(variant, pretrained=False, in_chans=in_channels)
+
+    @staticmethod
     def create_convnextv2_from_config(config: dict) -> nn.Module:
         return ConvNextV2Model(
             ConvNextV2Config(**config)
@@ -315,25 +320,6 @@ def run_benchmark(cfg: DictConfig) -> None:
                 )
                 results.append(result)
 
-        elif cfg.model.type == "mlp":
-            log.info("Benchmarking MLP models")
-            for hidden_sizes in cfg.model.architectures:
-                log.info(f"Testing MLP with architecture: {hidden_sizes}")
-                # Convert OmegaConf list to Python list
-                hidden_sizes_list = [int(size) for size in hidden_sizes]
-                model = ModelFactory.create_mlp(input_size, hidden_sizes_list)
-                result = benchmark_model(
-                    model,
-                    tuple(cfg.input.shape),
-                    cfg.input.batch_size,
-                    cfg.benchmark.num_warmup,
-                    cfg.benchmark.num_iterations,
-                    cfg.benchmark.device,
-                    cfg.benchmark.compile,
-                    cfg.benchmark.precision,
-                )
-                results.append(result)
-
         elif cfg.model.type == "resnet":
             log.info("Benchmarking ResNet models")
             for num_blocks in cfg.model.num_blocks:
@@ -354,6 +340,30 @@ def run_benchmark(cfg: DictConfig) -> None:
                     cfg.benchmark.precision,
                 )
                 results.append(result)
+
+        elif cfg.model.type == "efficientnet":
+            log.info("Benchmarking EfficientNet models")
+            for variant in cfg.model.variants:
+                log.info(f"Testing EfficientNet variant: {variant}")
+                try:
+                    model = ModelFactory.create_efficientnet(
+                        variant,
+                        cfg.input.shape[0]
+                    )
+                    result = benchmark_model(
+                        model,
+                        tuple(cfg.input.shape),
+                        cfg.input.batch_size,
+                        cfg.benchmark.num_warmup,
+                        cfg.benchmark.num_iterations,
+                        cfg.benchmark.device,
+                        cfg.benchmark.compile,
+                        cfg.benchmark.precision,
+                    )
+                    results.append(result)
+                except Exception as e:
+                    log.error(f"Error testing EfficientNet variant {variant}: {str(e)}")
+                    continue
 
         elif cfg.model.type == "convnext":
             log.info("Benchmarking ConvNeXt models")

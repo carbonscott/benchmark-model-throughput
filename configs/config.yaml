@@ -26,3 +26,8 @@ hydra:
   sweep:
     dir: multirun/${now:%Y-%m-%d}/${now:%H-%M-%S}
     subdir: ${model.type}
+  sweeper:
+    params:
+      input.batch_size: 1,2,4,8,16,32,64
+      benchmark.precision.dtype: float32,float16,bfloat16
+      benchmark.compile.backend: null,torch,tensorrt
