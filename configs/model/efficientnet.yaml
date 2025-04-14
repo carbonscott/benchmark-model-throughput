@@ -1,0 +1,27 @@
+# Model type
+type: efficientnet
+
+# List of EfficientNet variants to benchmark
+variants:
+  - efficientnet_b0
+  - efficientnet_b1
+  - efficientnet_b2
+  - efficientnet_b3
+  - efficientnet_b4
+  - efficientnet_b5
+  - efficientnet_b6
+  - efficientnet_b7
+  - efficientnet_v2_s
+  - efficientnet_v2_m
+  - efficientnet_v2_l
+  - tf_efficientnet_b0
+  - tf_efficientnet_b1
+  - tf_efficientnet_b2
+  - tf_efficientnet_b3
+  - tf_efficientnet_b4
+  - tf_efficientnet_b5
+  - tf_efficientnet_b6
+  - tf_efficientnet_b7
+  - tf_efficientnetv2_s
+  - tf_efficientnetv2_m
+  - tf_efficientnetv2_l
